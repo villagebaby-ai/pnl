@@ -825,10 +825,15 @@ async function renderCompare(){
         if(d!==0){const ap=Math.abs(d);const cls=ap>=10?'big':ap>=5?'mid':'';chg=`<span class="chg ${d>0?'up':'dn'} ${cls}">${d>0?'▲':'▼'} ${Math.abs(d).toFixed(1)}%p</span>`;}
       } else if(pv!==0&&pv!=null){
         const p=(v-pv)/Math.abs(pv)*100;
-        if(Math.abs(p)>=0.5){const ap=Math.abs(p);const cls=ap>=30?'big':ap>=10?'mid':'';chg=`<span class="chg ${p>0?'up':'dn'} ${cls}">${p>0?'▲':'▼'} ${Math.abs(p).toFixed(1)}%</span>`;}
-      } else if(pv===0&&v!==0){chg='<span class="chg up mid">신규</span>';}
+        if(Math.abs(p)>=0.5){
+          const ap=Math.abs(p);const cls=ap>=30?'big':ap>=10?'mid':'';
+          const mult=(p>=100&&pv>0)?` (${(v/pv).toFixed(1)}배)`:'';
+          chg=`<span class="chg ${p>0?'up':'dn'} ${cls}" title="전월 ${fmt(pv)} → ${fmt(v)}">${p>0?'▲':'▼'} ${Math.abs(p).toFixed(1)}%${mult}</span>`;
+        }
+      } else if(pv===0&&v!==0){chg='<span class="chg up mid" title="전월 0원">신규</span>';}
     }
-    return `<td class="amt">${valTxt}${chg}</td>`;
+    const prevTitle=i>0?` title="전월 ${isRate?cols[i-1].vals[item].toFixed(1)+'%':fmt(cols[i-1].vals[item])} → ${valTxt}"`:'';
+    return `<td class="amt"${prevTitle}>${valTxt}${chg}</td>`;
   }
   el.innerHTML=`
     <div style="font-size:12px;color:#86868b;margin-bottom:12px;">전월 대비 증감율 · <span class="chg up big" style="font-size:11px;">▲ 30%+</span> 크게 튀는 항목 · <b>▲/▼ 10%+</b> 굵게 표시 — 튀는 숫자를 먼저 점검하세요</div>

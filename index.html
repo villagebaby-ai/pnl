@@ -85,7 +85,9 @@ tr.clk{cursor:pointer;}tr.clk:hover td{background:#f0f7ff;}
 .cmpwrap{overflow-x:auto;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);}
 .cmp{min-width:100%;}
 .content.wide{max-width:none;}
-.cmp th,.cmp td{white-space:nowrap;padding:8px 10px;font-size:12px;}
+.cmp th,.cmp td{white-space:nowrap;padding:8px 10px;font-size:12px;overflow:hidden;text-overflow:ellipsis;}
+.colrz{position:absolute;top:20%;right:-4px;width:9px;height:60%;cursor:col-resize;border-right:2px solid #e5e5e7;z-index:2;}
+.colrz:hover{border-right-color:#0071e3;}
 .cmp th{text-align:right;}
 .cmp th:first-child{text-align:left;}
 .cmp td:first-child,.cmp th:first-child{position:sticky;left:0;background:#fff;z-index:1;box-shadow:2px 0 0 #f2f2f7;}
@@ -844,6 +846,43 @@ async function renderCompare(){
       <tr><th>항목</th>${cols.map(c=>`<th class="amt">${c.label}</th>`).join('')}</tr>
       ${items.map(item=>`<tr${groupRows.has(item)?' class="grp"':''}><td>${groupRows.has(item)?'<b>'+item+'</b>':'└ '+item}</td>${cols.map((c,i)=>cell(item,i)).join('')}</tr>`).join('')}
     </table></div>`;
+  initCmpResize();
+}
+/* 월 비교 표 열 너비 드래그 조절 (localStorage 저장) */
+function initCmpResize(){
+  const tbl=document.querySelector('#compare .cmp');if(!tbl||tbl._rsz)return;tbl._rsz=true;
+  let saved={};try{saved=JSON.parse(localStorage.getItem('pnl_colw')||'{}')||{};}catch(e){saved={};}
+  const ths=[...tbl.querySelectorAll('tr:first-child th')];
+  const cg=document.createElement('colgroup');
+  ths.forEach((th,i)=>{
+    const label=th.textContent.trim();
+    const col=document.createElement('col');
+    if(saved[label])col.style.width=saved[label]+'px';
+    cg.appendChild(col);
+    th.style.position='relative';
+    const hd=document.createElement('span');hd.className='colrz';th.appendChild(hd);
+    hd.addEventListener('mousedown',e=>{
+      e.preventDefault();
+      const cols2=[...cg.children];
+      const rendered=cols2.map(c2=>c2.getBoundingClientRect().width);
+      cols2.forEach((c2,j)=>{c2.style.width=rendered[j]+'px';});
+      const total=rendered.reduce((s,w)=>s+w,0);
+      tbl.style.tableLayout='fixed';tbl.style.width=total+'px';
+      const sx=e.clientX,sw=rendered[i];
+      const mv=ev=>{const w=Math.max(56,sw+ev.clientX-sx);col.style.width=w+'px';tbl.style.width=(total-sw+w)+'px';};
+      const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);
+        const ths2=[...tbl.querySelectorAll('tr:first-child th')];
+        cols2.forEach((c2,j)=>{const lb=(ths2[j]?ths2[j].textContent:'').trim();if(lb)saved[lb]=Math.round(c2.getBoundingClientRect().width);});
+        try{localStorage.setItem('pnl_colw',JSON.stringify(saved));}catch(e2){}};
+      document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);
+    });
+  });
+  tbl.insertBefore(cg,tbl.firstChild);
+  /* 저장된 너비가 모든 열에 있으면 고정 레이아웃으로 복원 */
+  if([...cg.children].length&&[...cg.children].every(c2=>c2.style.width)){
+    tbl.style.tableLayout='fixed';
+    tbl.style.width=[...cg.children].reduce((s,c2)=>s+parseFloat(c2.style.width),0)+'px';
+  }
 }
 async function renderDash(){
   const el=document.getElementById('dashboard');

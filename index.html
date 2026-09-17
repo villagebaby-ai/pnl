@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="robots" content="noindex,nofollow">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>빌리지베이비 P&L</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:'Apple SD Gothic Neo','Noto Sans KR',sans-serif;}
+body{background:#f5f5f7;color:#1d1d1f;min-height:100vh;}
+.header{background:#1d1d1f;color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;}
+.header h1{font-size:18px;font-weight:500;}
+.status{font-size:12px;color:#86868b;display:flex;align-items:center;gap:6px;}
+.dot{width:7px;height:7px;border-radius:50%;background:#30d158;}
+.dot.err{background:#ff453a;}
+.tabs{display:flex;background:#fff;border-bottom:1px solid #e5e5e7;padding:0 24px;overflow-x:auto;}
+.tab{padding:14px 16px;font-size:14px;color:#86868b;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap;}
+.tab.active{color:#0071e3;border-bottom-color:#0071e3;font-weight:500;}
+.content{max-width:960px;margin:0 auto;padding:24px;}
+.section{display:none;}
+.section.active{display:block;}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:24px;}
+.card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.card-label{font-size:11px;color:#86868b;margin-bottom:6px;}
+.card-value{font-size:13px;font-weight:600;word-break:break-all;}.card-value.pct{font-size:20px;word-break:normal;}
+.card-value.green{color:#30d158;}
+.card-value.red{color:#ff453a;}
+.panel{background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:16px;}
+.panel-title{padding:14px 18px;font-size:14px;font-weight:500;border-bottom:1px solid #f2f2f7;}
+table{width:100%;border-collapse:collapse;}
+th{font-size:11px;color:#86868b;font-weight:400;text-align:left;padding:9px 18px;background:#fafafa;border-bottom:1px solid #f2f2f7;}
+td{font-size:13px;padding:9px 18px;border-bottom:1px solid #f2f2f7;}
+tr:last-child td{border-bottom:none;}
+.amt{text-align:right;font-variant-numeric:tabular-nums;}
+.total-row td{font-weight:600;background:#fafafa;}
+.sub-row td{font-size:12px;color:#555;padding-top:6px;padding-bottom:6px;}
+.sub-row td:first-child{padding-left:36px;}
+.bar-wrap{height:4px;background:#f2f2f7;border-radius:2px;margin-top:3px;}
+.bar{height:4px;border-radius:2px;background:#0071e3;}
+.bar.red{background:#ff453a;}
+.form-card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:16px;}
+.form-title{font-size:14px;font-weight:500;margin-bottom:16px;}
+.month-row{display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-wrap:wrap;}
+.month-row label{font-size:13px;color:#86868b;}
+select,input[type=number],input[type=text]{padding:8px 12px;border:1px solid #d2d2d7;border-radius:8px;background:#fff;color:#1d1d1f;font-size:13px;outline:none;}
+select:focus,input:focus{border-color:#0071e3;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.ig{margin-bottom:12px;}
+.ig label{display:block;font-size:11px;color:#86868b;margin-bottom:4px;}
+.ig input{width:100%;}
+.sh{font-size:12px;font-weight:600;color:#86868b;margin:16px 0 10px;padding-bottom:6px;border-bottom:1px solid #f2f2f7;text-transform:uppercase;letter-spacing:.5px;}
+.auto-notice{background:#f0f7ff;border:1px solid #d0e8ff;border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:12px;color:#0071e3;}
+.btn-row{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+.btn{padding:9px 18px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #d2d2d7;background:#fff;color:#1d1d1f;font-weight:500;}
+.btn:hover{background:#f5f5f7;}
+.btn.primary{background:#0071e3;color:#fff;border-color:#0071e3;}
+.btn.danger{color:#ff453a;border-color:#ffd0cc;}
+.btn.sm{padding:6px 12px;font-size:12px;}
+.btn.green{background:#30d158;color:#fff;border-color:#30d158;}
+.rec-item{display:flex;align-items:center;justify-content:space-between;padding:13px 18px;border-bottom:1px solid #f2f2f7;cursor:pointer;}
+.rec-item:last-child{border-bottom:none;}
+.rec-item:hover{background:#fafafa;}
+.rec-name{font-size:13px;font-weight:500;}
+.rec-meta{font-size:12px;color:#86868b;margin-top:2px;}
+.badge{display:inline-block;font-size:10px;padding:2px 8px;border-radius:10px;margin-left:6px;vertical-align:middle;}
+.badge.profit{background:#e8faf0;color:#30d158;}
+.badge.loss{background:#fff0ee;color:#ff453a;}
+.trend{display:flex;gap:8px;overflow-x:auto;padding-bottom:8px;margin-bottom:20px;}
+.trend-card{flex-shrink:0;background:#fff;border:1.5px solid #e5e5e7;border-radius:10px;padding:10px 14px;min-width:100px;cursor:pointer;}
+.trend-card:hover,.trend-card.active{border-color:#0071e3;background:#f0f7ff;}
+.trend-month{font-size:11px;color:#86868b;}
+.trend-profit{font-size:14px;font-weight:600;margin-top:3px;}
+.empty{text-align:center;padding:48px 24px;color:#86868b;font-size:14px;line-height:1.8;}
+.loading{text-align:center;padding:48px;color:#86868b;font-size:14px;}
+.upload-zone{border:2px dashed #d2d2d7;border-radius:12px;padding:32px;text-align:center;cursor:pointer;margin-bottom:16px;}
+.upload-zone:hover,.upload-zone.dragging{border-color:#0071e3;background:#f0f7ff;}
+.upload-icon{font-size:32px;margin-bottom:8px;}
+.upload-title{font-size:14px;font-weight:500;margin-bottom:4px;}
+.upload-sub{font-size:12px;color:#86868b;}
+.upload-result{background:#f0f7ff;border:1px solid #d0e8ff;border-radius:10px;padding:16px;margin-bottom:16px;}
+.upload-result-title{font-size:13px;font-weight:500;margin-bottom:12px;color:#0071e3;}
+.acct-row{display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid #e5e5e7;}
+.acct-row:last-child{border-bottom:none;}
+.not-reflected{background:#fff0ee;border:1px solid #ffd0cc;border-radius:10px;padding:14px;margin-bottom:12px;}
+.jabiik-box{background:#f0fff4;border:1px solid #b7f5c8;border-radius:10px;padding:14px;margin-bottom:12px;}
+
+.pw-screen{position:fixed;top:0;left:0;width:100%;height:100%;background:#1d1d1f;display:flex;align-items:center;justify-content:center;z-index:9999;}
+.pw-box{background:#2c2c2e;border-radius:16px;padding:40px;width:320px;text-align:center;}
+.pw-logo{font-size:32px;margin-bottom:16px;}
+.pw-title{color:#fff;font-size:18px;font-weight:500;margin-bottom:8px;}
+.pw-sub{color:#86868b;font-size:13px;margin-bottom:24px;}
+.pw-input{width:100%;padding:12px;border:1px solid #3a3a3c;border-radius:10px;background:#1c1c1e;color:#fff;font-size:16px;text-align:center;letter-spacing:4px;outline:none;margin-bottom:12px;}
+.pw-input:focus{border-color:#0071e3;}
+.pw-btn{width:100%;padding:12px;border-radius:10px;background:#0071e3;color:#fff;border:none;font-size:15px;font-weight:500;cursor:pointer;}
+.pw-btn:hover{background:#0077ed;}
+.pw-error{color:#ff453a;font-size:13px;margin-top:8px;display:none;}
+</style>
+</head>
+<body>
+
+<div class="pw-screen" id="pw-screen">
+  <div class="pw-box">
+    <div class="pw-logo">📊</div>
+    <div class="pw-title">빌리지베이비 P&L</div>
+    <div class="pw-sub">비밀번호를 입력해주세요</div>
+    <input type="password" class="pw-input" id="pw-input" placeholder="••••••" maxlength="10" onkeydown="if(event.key==='Enter')checkPw()">
+    <button class="pw-btn" onclick="checkPw()">입력</button>
+    <div class="pw-error" id="pw-error">비밀번호가 틀렸어요 🔒</div>
+  </div>
+</div>
+<div class="header">
+  <h1>📊 빌리지베이비 P&L</h1>
+  <div class="status"><div class="dot" id="dot"></div><span id="status-txt">연결 중...</div>
+</div>
+<div class="tabs">
+  <div class="tab active" onclick="showTab('dashboard')">현황</div>
+  <div class="tab" onclick="showTab('input')">입력</div>
+  <div class="tab" onclick="showTab('upload')">📎 위하고 업로드</div>
+  <div class="tab" onclick="showTab('txlist')">거래내역</div>
+  <div class="tab" onclick="showTab('history')">기록</div>
+</div>
+<div class="content">
+
+  <!-- 현황 -->
+  <div class="section active" id="dashboard"><div class="loading">데이터 불러오는 중...</div></div>
+
+  <!-- 입력 -->
+  <div class="section" id="input">
+    <div class="form-card">
+      <div class="form-title">월결산 데이터 입력</div>
+      <div class="month-row">
+        <label>결산 월:</label>
+        <select id="yr" onchange="syncInputForm()"></select>
+        <select id="mo" onchange="syncInputForm()">
+          <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
+          <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
+          <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
+          <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+        </select>
+      </div>
+
+      <div class="sh">💰 매출 (수기 입력분 — 매출세금계산서 업로드분은 현황에서 자동 합산)</div>
+      <div class="grid2">
+        <div>
+          <div class="ig"><label>상품매출 - 유팡 (수기)</label><input type="text" inputmode="numeric" id="f-유팡" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>상품매출 - 락앤락 (수기)</label><input type="text" inputmode="numeric" id="f-락앤락" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>상품매출 - 아이코닉스 (수기)</label><input type="text" inputmode="numeric" id="f-아이코닉스" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>상품매출 - 고퀄 (수기)</label><input type="text" inputmode="numeric" id="f-고퀄" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>제품매출 - PB매출 합계 (수기)</label><input type="text" inputmode="numeric" id="f-PB매출sum" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>제품매출 - 쿠팡로켓 PB매출 (수기)</label><input type="text" inputmode="numeric" id="f-쿠팡로켓PB매출" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>제품매출 - 맘가이드 PB매출 (수기)</label><input type="text" inputmode="numeric" id="f-맘가이드PB매출" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>수수료매출 (수기)</label><input type="text" inputmode="numeric" id="f-수수료매출" placeholder="0" oninput="formatNumberInput(this)"></div>
+        </div>
+        <div>
+          <div class="ig"><label>광고매출 (수기)</label><input type="text" inputmode="numeric" id="f-광고매출" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>이자수익 (수기)</label><input type="text" inputmode="numeric" id="f-이자수익" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>외화수익 (수기)</label><input type="text" inputmode="numeric" id="f-외화수익" placeholder="0" oninput="formatNumberInput(this)"></div>
+        </div>
+      </div>
+      <div class="ig"><label>잡이익 (매출 미반영분 — 별도 표시)</label><input type="text" inputmode="numeric" id="f-잡이익" placeholder="0" oninput="formatNumberInput(this)"></div>
+
+      <div class="sh">👥 급여 (수기)</div>
+      <div class="grid2">
+        <div><div class="ig"><label>상용직 급여</label><input type="text" inputmode="numeric" id="f-상용직급여" placeholder="0" oninput="formatNumberInput(this)"></div></div>
+        <div><div class="ig"><label>외주인건비</label><input type="text" inputmode="numeric" id="f-외주인건비" placeholder="0" oninput="formatNumberInput(this)"></div></div>
+        <div><div class="ig"><label>퇴직급여</label><input type="text" inputmode="numeric" id="f-퇴직급여" placeholder="0" oninput="formatNumberInput(this)"></div></div>
+      </div>
+
+      <div class="sh">🏥 4대보험 (수기)</div>
+      <div class="grid2">
+        <div>
+          <div class="ig"><label>건강+장기</label><input type="text" inputmode="numeric" id="f-건강장기" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>국민연금</label><input type="text" inputmode="numeric" id="f-국민연금" placeholder="0" oninput="formatNumberInput(this)"></div>
+        </div>
+        <div>
+          <div class="ig"><label>고용보험</label><input type="text" inputmode="numeric" id="f-고용보험" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>산재보험</label><input type="text" inputmode="numeric" id="f-산재보험" placeholder="0" oninput="formatNumberInput(this)"></div>
+        </div>
+      </div>
+
+      <div class="sh">💳 신용카드 수수료 (수기)</div>
+      <div class="grid2">
+        <div>
+          <div class="ig"><label>신한카드</label><input type="text" inputmode="numeric" id="f-신용카드신한" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>비씨카드</label><input type="text" inputmode="numeric" id="f-신용카드비씨" placeholder="0" oninput="formatNumberInput(this)"></div>
+        </div>
+        <div>
+          <div class="ig"><label>삼성카드</label><input type="text" inputmode="numeric" id="f-신용카드삼성" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>우리카드</label><input type="text" inputmode="numeric" id="f-신용카드우리" placeholder="0" oninput="formatNumberInput(this)"></div>
+        </div>
+      </div>
+
+      <div class="sh">📣 커머스마케팅비 (수기)</div>
+      <div class="grid2">
+        <div>
+          <div class="ig"><label>상품금액할인</label><input type="text" inputmode="numeric" id="f-상품금액할인" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>장바구니할인</label><input type="text" inputmode="numeric" id="f-장바구니할인" placeholder="0" oninput="formatNumberInput(this)"></div>
+        </div>
+        <div>
+          <div class="ig"><label>적립금사용</label><input type="text" inputmode="numeric" id="f-적립금사용" placeholder="0" oninput="formatNumberInput(this)"></div>
+        </div>
+      </div>
+
+      <div class="sh">📦 재고 & 기타</div>
+      <div class="grid2">
+        <div>
+          <div class="ig"><label>기초재고</label><input type="text" inputmode="numeric" id="f-기초재고" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>기말재고</label><input type="text" inputmode="numeric" id="f-기말재고" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>당기매입 (자동계산 · 실시간, 저장 불필요)</label><input type="text" inputmode="numeric" id="f-당기매입" placeholder="위하고 업로드 후 자동계산" disabled style="background:#f5f5f7;color:#86868b;"></div>
+        </div>
+        <div>
+          <div class="ig"><label>외화이체 (수기)</label><input type="text" inputmode="numeric" id="f-외화이체" placeholder="0" oninput="formatNumberInput(this);updateDangiCalc()"></div>
+          <div class="ig"><label>기타지출 (수기)</label><input type="text" inputmode="numeric" id="f-기타지출" placeholder="0" oninput="formatNumberInput(this)"></div>
+          <div class="ig"><label>메모</label><input type="text" id="f-memo" placeholder="특이사항"></div>
+        </div>
+      </div>
+
+      <div class="auto-notice">📎 매입세금계산서, 매입계산서, PG수수료, 운반비는 <b>위하고 업로드</b> 탭에서 자동 반영됩니다. 매출세금계산서를 올리면 위에 입력한 수기 매출과 <b>더해져서</b> 현황 화면의 "전체 매출"에 표시됩니다 (여기 입력값은 그대로 유지돼요).</div>
+
+      <div class="btn-row">
+        <button class="btn" onclick="clearForm()">초기화</button>
+        <button class="btn primary" onclick="saveMonth()">☁️ 저장하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 위하고 업로드 -->
+  <div class="section" id="upload">
+    <div class="form-card">
+      <div class="form-title">📎 위하고 엑셀 업로드</div>
+      <div class="month-row">
+        <label>해당 월:</label>
+        <select id="uyr"></select>
+        <select id="umo">
+          <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
+          <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
+          <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
+          <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+        </select>
+        <select id="utype">
+          <option value="매입세금계산서">매입세금계산서</option>
+          <option value="매입계산서">매입계산서</option>
+          <option value="매출세금계산서">매출세금계산서</option>
+          <option value="기타">기타</option>
+        </select>
+      </div>
+      <div class="upload-zone" onclick="document.getElementById('file-input').click()"
+        ondragover="event.preventDefault();this.classList.add('dragging')"
+        ondragleave="this.classList.remove('dragging')"
+        ondrop="handleDrop(event)">
+        <div class="upload-icon">📂</div>
+        <div class="upload-title">위하고 엑셀 파일을 드래그하거나 클릭해서 선택</div>
+        <div class="upload-sub">매입세금계산서: PG수수료·운반비 자동 분리 · 손익미반영 자동 처리 · 매출세금계산서: 대변계정 기준 매출항목 자동 분류</div>
+      </div>
+      <input type="file" id="file-input" accept=".xlsx,.xls" style="display:none" onchange="handleFile(this.files[0])">
+      <div id="upload-preview"></div>
+    </div>
+  </div>
+
+  <!-- 거래내역 -->
+  <div class="section" id="txlist">
+    <div class="form-card">
+      <div class="form-title">거래내역 조회</div>
+      <div class="month-row">
+        <label>조회 월:</label>
+        <select id="tyr" onchange="loadTx()"></select>
+        <select id="tmo" onchange="loadTx()">
+          <option value="1">1월</option><option value="2">2월</option><option value="3">3월</option>
+          <option value="4">4월</option><option value="5">5월</option><option value="6">6월</option>
+          <option value="7">7월</option><option value="8">8월</option><option value="9">9월</option>
+          <option value="10">10월</option><option value="11">11월</option><option value="12">12월</option>
+        </select>
+      </div>
+    </div>
+    <div id="tx-content"></div>
+  </div>
+
+  <!-- 기록 -->
+  <div class="section" id="history"><div id="hist-content"></div></div>
+</div>
+
+<script>
+const SUPABASE_URL='https://giykohijkwybjvyltozo.supabase.co';
+const SUPABASE_KEY='sb_publishable_GB9f_RLPAu9q7uurv3O9-w_ZiqLwxnl';
+const sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+let records=[];
+let dashView=null;
+let _curTxTotals={당기매입:0};
+
+// PG수수료 거래처, 손익미반영 계정, 운반비 계정 (매입 쪽에만 적용)
+const PG거래처=['네이버파이낸셜','토스페이먼츠','카카오페이'];
+const 손익미반영계정=['상품','부가세대급금'];
+const 운반비계정=['운반비'];
+
+const FIELDS=['유팡','락앤락','아이코닉스','고퀄','PB매출sum','쿠팡로켓PB매출','맘가이드PB매출','수수료매출','광고매출','이자수익','외화수익','잡이익',
+  '상용직급여','외주인건비','퇴직급여','건강장기','국민연금','고용보험','산재보험',
+  '신용카드신한','신용카드비씨','신용카드삼성','신용카드우리',
+  '상품금액할인','장바구니할인','적립금사용',
+  '기초재고','기말재고','외화이체','기타지출'];
+// 마이그레이션 전 기존 '제품매출' 컬럼 (레거시 데이터 폴백용, 입력폼에는 없음)
+const LEGACY_제품매출='제품매출';
+
+// 위하고 대변계정 값이 이 목록에 있으면 매출 자동 반영 대상
+const REVENUE_FIELDS=['상품매출','제품매출','수수료매출','광고매출','이자수익','외화수익'];
+
+function n(v){return +v||0;}
+function rawNum(el){
+  if(!el)return 0;
+  return +String(el.value).replace(/,/g,'').trim()||0;
+}
+function formatNumberInput(el){
+  let raw=el.value.replace(/[^0-9-]/g,'');
+  if(raw===''||raw==='-'){return;}
+  const neg=raw.startsWith('-');
+  if(neg)raw=raw.slice(1);
+  raw=raw.replace(/^0+(?=\d)/,'');
+  const num=Number(raw||0);
+  const pos=el.selectionStart;
+  const lenBefore=el.value.length;
+  el.value=(neg?'-':'')+num.toLocaleString('ko-KR');
+  const lenAfter=el.value.length;
+  const newPos=Math.max(0,pos+(lenAfter-lenBefore));
+  el.setSelectionRange(newPos,newPos);
+}
+function fmtInput(v){
+  const num=Number(v)||0;
+  return num?num.toLocaleString('ko-KR'):'';
+}
+function fmt(v){return ''+Math.round(v).toLocaleString('ko-KR')+'원';}
+function fmtS(v){
+  const a=Math.abs(v),s=v<0?'-':'';
+  if(a>=100000000)return s+(a/100000000).toFixed(1)+'억';
+  if(a>=10000000)return s+(a/10000000).toFixed(1)+'천만';
+  if(a>=1000000)return s+(a/1000000).toFixed(0)+'백만';
+  return s+Math.round(a).toLocaleString();
+}
+
+function calcCost(d, txTotals, txRevenue){
+  const 급여계=n(d.상용직급여)+n(d.외주인건비)+n(d.퇴직급여);
+  const 사대보험계=n(d.건강장기)+n(d.국민연금)+n(d.고용보험)+n(d.산재보험);
+  const 신용카드계=n(d.신용카드신한)+n(d.신용카드비씨)+n(d.신용카드삼성)+n(d.신용카드우리);
+  const 커머스계=n(d.상품금액할인)+n(d.장바구니할인)+n(d.적립금사용);
+  const tx=txTotals||{pg:0,운반비:0,매입세금계산서:0,매입계산서:0,당기매입:0};
+  const cost=급여계+사대보험계+신용카드계+커머스계
+    +tx.pg+tx.운반비+tx.매입세금계산서+tx.매입계산서
+    +n(d.외화이체)+n(d.기타지출);
+  const 당기매입계산=n(tx.당기매입)+n(d.외화이체);
+  const 매출원가=n(d.기초재고)+당기매입계산-n(d.기말재고);
+  const 비용반영금액=n(d.기초재고)-n(d.기말재고);
+  const txRev=txRevenue||{};
+  // 매출 = 수기 입력분 + 매출세금계산서 업로드분 (계정별로 합산)
+  // 상품매출 수기분 = 유팡+락앤락+아이코닉스+고퀄. 넷 다 0인데 예전 '상품매출' 값이 있으면(마이그레이션 전 데이터) 그걸 대신 사용
+  const 브랜드입력있음=n(d.유팡)!==0||n(d.락앤락)!==0||n(d.아이코닉스)!==0||n(d.고퀄)!==0;
+  let 상품매출수기=브랜드입력있음?(n(d.유팡)+n(d.락앤락)+n(d.아이코닉스)+n(d.고퀄)):0;
+  if(!브랜드입력있음&&n(d.상품매출)>0)상품매출수기=n(d.상품매출);
+  // 브랜드팀 매출시트 = (PB매출합계 - 쿠팡로켓PB매출 - 맘가이드PB매출) / 1.1 (부가세 제외)
+  const PB매출sum=n(d['PB매출sum']),쿠팡로켓PB매출=n(d.쿠팡로켓PB매출),맘가이드PB매출=n(d.맘가이드PB매출);
+  const PB원시입력있음=PB매출sum!==0||쿠팡로켓PB매출!==0||맘가이드PB매출!==0;
+  let 제품매출수기=PB원시입력있음?(PB매출sum-쿠팡로켓PB매출-맘가이드PB매출)/1.1:0;
+  if(!PB원시입력있음&&n(d.제품매출)>0)제품매출수기=n(d.제품매출); // 마이그레이션 전 데이터 폴백
+  const revBreak={
+    상품매출:{수기:상품매출수기,tx:n(txRev['상품매출'])},
+    제품매출:{수기:제품매출수기,tx:n(txRev['제품매출'])},
+    수수료매출:{수기:n(d.수수료매출),tx:n(txRev['수수료매출'])},
+    광고매출:{수기:n(d.광고매출),tx:n(txRev['광고매출'])},
+    이자수익:{수기:n(d.이자수익),tx:n(txRev['이자수익'])},
+    외화수익:{수기:n(d.외화수익),tx:n(txRev['외화수익'])},
+  };
+  const rev=Object.values(revBreak).reduce((s,v)=>s+v.수기+v.tx,0);
+  const profit=rev-cost-비용반영금액;
+  return{rev,cost,매출원가,비용반영금액,profit,급여계,사대보험계,신용카드계,커머스계,tx,revBreak,당기매입계산};
+}
+
+function setStatus(ok,msg){
+  document.getElementById('dot').className='dot'+(ok?'':' err');
+  document.getElementById('status-txt').textContent=msg;
+}
+
+async function loadAll(){
+  setStatus(true,'불러오는 중...');
+  try{
+    const {data,error}=await sb.from('pl_records').select('*').order('year').order('month');
+    if(error)throw error;
+    records=data||[];
+    setStatus(true,`연결됨 · ${records.length}개월 저장됨`);
+  }catch(e){
+    setStatus(false,'연결 실패: '+e.message);
+    records=[];
+  }
+  renderDash();
+  renderHist();
+}
+
+async function getTxTotals(year,month){
+  const {data}=await sb.from('transactions').select('*').eq('year',year).eq('month',month);
+  const rows=data||[];
+  const totals={pg:0,운반비:0,매입세금계산서:0,매입계산서:0,당기매입:0};
+  const details={pg:{},운반비:{},매입세금계산서:{},매입계산서:{},미반영:{}};
+  const revenue={}; // 매출세금계산서 대변계정별 합계 (공급가액) — 비용 계산과 완전히 분리
+  rows.forEach(r=>{
+    // 매출세금계산서는 매출 데이터이므로 비용 계산에서 제외하고, 별도로 매출 합계에만 반영
+    if(r.파일종류==='매출세금계산서'){
+      const acct=r.차변계정;
+      revenue[acct]=(revenue[acct]||0)+n(r.공급가액);
+      return;
+    }
+    if(r.손익미반영){
+      if(!details.미반영[r.차변계정])details.미반영[r.차변계정]={공급가액:0,건수:0};
+      details.미반영[r.차변계정].공급가액+=n(r.공급가액);
+      details.미반영[r.차변계정].건수++;
+      return;
+    }
+    const acct=r.차변계정;
+    const amt=n(r.공급가액);
+    if(acct==='(판)PG수수료[자동분류]'){
+      totals.pg+=amt;
+      if(!details.pg[r.거래처])details.pg[r.거래처]=0;
+      details.pg[r.거래처]+=amt;
+    } else if(acct.includes('운반비')){
+      totals.운반비+=amt;
+      if(!details.운반비[acct])details.운반비[acct]=0;
+      details.운반비[acct]+=amt;
+    } else if(r.파일종류==='매입계산서'){
+      totals.매입계산서+=amt;
+      if(!details.매입계산서[acct])details.매입계산서[acct]=0;
+      details.매입계산서[acct]+=amt;
+    } else {
+      totals.매입세금계산서+=amt;
+      if(!details.매입세금계산서[acct])details.매입세금계산서[acct]=0;
+      details.매입세금계산서[acct]+=amt;
+    }
+    // 당기매입 구성: 외주가공비+잡자재대+원재료+외화이체
+    if(['외주가공비','잡자재대','원재료'].some(k=>acct.includes(k))){
+      totals.당기매입+=amt;
+    }
+  });
+  return{totals,details,revenue};
+}
+
+async function saveMonth(){
+  const year=+document.getElementById('yr').value;
+  const month=+document.getElementById('mo').value;
+  const data={year,month,memo:document.getElementById('f-memo').value||''};
+  FIELDS.forEach(f=>{const el=document.getElementById('f-'+f);data[f]=el?rawNum(el):0;});
+  data.updated_at=new Date().toISOString();
+  const exists=records.find(r=>r.year===year&&r.month===month);
+  if(exists&&!confirm(`${year}년 ${month}월 데이터가 이미 있어요. 덮어쓸까요?`))return;
+  setStatus(true,'저장 중...');
+  try{
+    const {error}=await sb.from('pl_records').upsert({...data},{onConflict:'year,month'});
+    if(error)throw error;
+    await loadAll();
+    dashView={year,month};
+    alert(`${year}년 ${month}월 저장 완료! ✅`);
+    showTab('dashboard');
+  }catch(e){
+    setStatus(false,'저장 실패: '+e.message);
+    alert('저장 실패: '+e.message);
+  }
+}
+
+async function deleteRecord(year,month){
+  if(!confirm(`${year}년 ${month}월 데이터를 삭제할까요?`))return;
+  await sb.from('pl_records').delete().eq('year',year).eq('month',month);
+  await loadAll();
+}
+
+// ── 위하고 업로드 ──
+function handleDrop(e){
+  e.preventDefault();
+  document.getElementById('upload-zone')||document.querySelector('.upload-zone');
+  handleFile(e.dataTransfer.files[0]);
+}
+
+function handleFile(file){
+  if(!file)return;
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+    const ws=wb.Sheets[wb.SheetNames[0]];
+    const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+    let hi=-1;
+    for(let i=0;i<rows.length;i++){
+      if(rows[i].includes('차변계정')||rows[i].includes('거래처')){hi=i;break;}
+    }
+    if(hi===-1){alert('위하고 형식 파일이 아닌 것 같아요.');return;}
+    const headers=rows[hi].map(h=>String(h).trim());
+    const gi=name=>headers.findIndex(h=>h.includes(name));
+    const iDate=gi('일자'),iVendor=gi('거래처'),iItem=gi('품명'),
+          iSupply=gi('공급가액'),iTax=gi('부가세'),iTotal=gi('합계'),
+          iDebit=gi('차변계정'),iCredit=gi('대변계정');
+    const filetype=document.getElementById('utype').value;
+    const isSales=filetype==='매출세금계산서';
+    const txRows=[];
+    for(let i=hi+1;i<rows.length;i++){
+      const r=rows[i];
+      if(!r[iDebit])continue;
+      const 거래처=String(r[iVendor]||'').trim();
+      const 원본대변=String(r[iCredit]||'').trim();
+      const 원본차변=String(r[iDebit]||'').trim();
+      let 분류계정,미반영;
+      if(isSales){
+        // 매출세금계산서: 차변계정(외상매출금/미지급금)은 의미없고,
+        // 실제 매출 항목(상품매출/제품매출/수수료매출/광고매출 등)은 대변계정에 있음
+        분류계정=원본대변||'기타매출';
+        미반영=false;
+      } else {
+        // 매입세금계산서/매입계산서: 기존 로직 그대로 (차변계정 기준 + PG수수료 자동분리)
+        let 차변계정=원본차변;
+        if(차변계정.includes('지급수수료')&&PG거래처.some(p=>거래처.includes(p)))
+          차변계정='(판)PG수수료[자동분류]';
+        분류계정=차변계정;
+        미반영=손익미반영계정.some(k=>분류계정.includes(k));
+      }
+      txRows.push({
+        일자:String(r[iDate]||'').trim(),거래처,품명:String(r[iItem]||'').trim(),
+        공급가액:+String(r[iSupply]||'0').replace(/,/g,'')||0,
+        부가세:+String(r[iTax]||'0').replace(/,/g,'')||0,
+        합계:+String(r[iTotal]||'0').replace(/,/g,'')||0,
+        차변계정:분류계정,대변계정:원본대변,손익미반영:미반영,
+      });
+    }
+    // 계정별 합산
+    const summary={},summary미반영={};
+    txRows.forEach(r=>{
+      const t=r.손익미반영?summary미반영:summary;
+      if(!t[r.차변계정])t[r.차변계정]={공급가액:0,건수:0,합계:0};
+      t[r.차변계정].공급가액+=r.공급가액;
+      t[r.차변계정].건수++;
+      t[r.차변계정].합계+=r.합계;
+    });
+    renderUploadPreview(summary,summary미반영,txRows,file.name);
+    window._pendingTxRows=txRows;
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderUploadPreview(summary,summary미반영,txRows,filename){
+  const filetype=document.getElementById('utype').value;
+  const isSales=filetype==='매출세금계산서';
+  const entries=Object.entries(summary).sort((a,b)=>b[1].공급가액-a[1].공급가액);
+  const entries미반영=Object.entries(summary미반영).sort((a,b)=>b[1].공급가액-a[1].공급가액);
+  const totalSupply=entries.reduce((s,[,v])=>s+v.공급가액,0);
+  const total미반영=entries미반영.reduce((s,[,v])=>s+v.공급가액,0);
+  // 당기매입 (매입세금계산서일 때만)
+  const 당기매입자동=filetype==='매입세금계산서'
+    ?Object.entries(summary).filter(([a])=>['외주가공비','잡자재대','원재료'].some(k=>a.includes(k))).reduce((s,[,v])=>s+v.공급가액,0)
+    :0;
+  // 매출 자동반영 대상 (매출세금계산서일 때만) — FIELDS에 있는 매출 항목명과 일치하는 것만
+  const 매출반영대상=isSales?entries.filter(([a])=>REVENUE_FIELDS.includes(a)):[];
+  const 매출미매칭=isSales?entries.filter(([a])=>!REVENUE_FIELDS.includes(a)):[];
+
+  document.getElementById('upload-preview').innerHTML=`
+    <div class="upload-result">
+      <div class="upload-result-title">📋 ${filename} — ${txRows.length}건 인식됨</div>
+      <div style="font-size:11px;font-weight:600;color:#30d158;margin-bottom:6px;">✅ ${isSales?'매출 항목 (대변계정 기준, 공급가액)':'손익 반영 항목 (공급가액 기준)'}</div>
+      ${entries.map(([acct,v])=>`<div class="acct-row"><div><b>${acct}</b> <span style="color:#86868b;font-size:11px;">${v.건수}건</div><div style="font-weight:500;">${fmt(v.공급가액)} <span style="color:#86868b;font-size:11px;">합계 ${fmt(v.합계)}</div></div>`).join('')}
+      <div class="acct-row"><div style="font-weight:600;">소계</div><div style="font-weight:600;">${fmt(totalSupply)}</div></div>
+      ${entries미반영.length>0?`
+      <div class="not-reflected" style="margin-top:12px;">
+        <div style="font-size:11px;font-weight:600;color:#ff453a;margin-bottom:6px;">🚫 손익 미반영 항목</div>
+        ${entries미반영.map(([acct,v])=>`<div class="acct-row"><div><b>${acct}</b> <span style="color:#86868b;font-size:11px;">${v.건수}건</div><div>${fmt(v.공급가액)}</div></div>`).join('')}
+        <div class="acct-row"><div style="font-weight:600;">소계</div><div style="font-weight:600;color:#ff453a;">${fmt(total미반영)}</div></div>
+      </div>`:''}
+      ${당기매입자동>0?`
+      <div style="background:#fff8e1;border:1px solid #ffe082;border-radius:10px;padding:14px;margin-top:12px;">
+        <div style="font-size:11px;font-weight:600;color:#f57c00;margin-bottom:8px;">📦 당기매입 자동 계산 (외주가공비+원재료+잡자재대)</div>
+        <div class="acct-row"><div>세금계산서 당기매입 소계</div><div style="font-weight:500;">${fmt(당기매입자동)}</div></div>
+        <div class="acct-row"><div>외화이체 (입력 탭에서 수기 입력)</div><div style="color:#86868b;font-size:12px;">입력 탭에서 직접 입력해주세요</div></div>
+      </div>`:''}
+      ${isSales?`
+      <div class="jabiik-box" style="margin-top:12px;">
+        <div style="font-size:11px;font-weight:600;color:#30d158;margin-bottom:8px;">💰 저장하면 현황 화면의 "전체 매출"에 수기 입력분과 더해져서 표시돼요 (입력 탭 수치는 그대로 유지됩니다)</div>
+        ${매출반영대상.length?매출반영대상.map(([acct,v])=>`<div class="acct-row"><div>${acct}</div><div style="font-weight:500;">${fmt(v.공급가액)}</div></div>`).join(''):'<div style="font-size:12px;color:#86868b;">일치하는 매출 항목이 없어요.</div>'}
+      </div>
+      ${매출미매칭.length?`
+      <div class="not-reflected" style="margin-top:8px;">
+        <div style="font-size:11px;font-weight:600;color:#ff453a;margin-bottom:6px;">⚠️ P&L 매출 항목명과 일치하지 않아 자동 합산되지 않아요</div>
+        ${매출미매칭.map(([acct,v])=>`<div class="acct-row"><div><b>${acct}</b></div><div>${fmt(v.공급가액)}</div></div>`).join('')}
+      </div>`:''}
+      `:''}
+      <div class="btn-row" style="justify-content:flex-start;margin-top:12px;">
+        <button class="btn green" onclick="saveTxRows()">☁️ 저장하기</button>
+        <button class="btn" onclick="document.getElementById('upload-preview').innerHTML=''">취소</button>
+      </div>
+    </div>`;
+  window._당기매입자동=당기매입자동;
+}
+
+async function saveTxRows(){
+  const year=+document.getElementById('uyr').value;
+  const month=+document.getElementById('umo').value;
+  const filetype=document.getElementById('utype').value;
+  const rows=window._pendingTxRows;
+  if(!rows||!rows.length){alert('업로드할 데이터가 없어요.');return;}
+  await sb.from('transactions').delete().eq('year',year).eq('month',month).eq('파일종류',filetype);
+  const {error}=await sb.from('transactions').insert(rows.map(r=>({...r,year,month,파일종류:filetype})));
+  if(error){alert('저장 실패: '+error.message);return;}
+
+  // 당기매입은 이제 저장 시점 스냅샷이 아니라 거래내역에서 항상 실시간으로 계산돼요 (calcCost 참고)
+
+  // 매출세금계산서는 입력 탭 수치를 덮어쓰지 않아요 — 현황 화면 계산 시 자동으로 더해집니다 (getTxTotals 참고)
+
+  await loadAll();
+  alert(`${year}년 ${month}월 ${filetype} ${rows.length}건 저장 완료! ✅`);
+  document.getElementById('upload-preview').innerHTML='';
+  window._pendingTxRows=null;window._당기매입자동=0;
+}
+
+async function loadTx(){
+  const year=+document.getElementById('tyr').value;
+  const month=+document.getElementById('tmo').value;
+  const el=document.getElementById('tx-content');
+  el.innerHTML='<div class="loading">불러오는 중...</div>';
+  const {data}=await sb.from('transactions').select('*').eq('year',year).eq('month',month).order('파일종류').order('차변계정');
+  if(!data||!data.length){el.innerHTML='<div class="empty">해당 월의 거래내역이 없어요.</div>';return;}
+  const byFile={};
+  data.forEach(r=>{if(!byFile[r.파일종류])byFile[r.파일종류]=[];byFile[r.파일종류].push(r);});
+  el.innerHTML=Object.entries(byFile).map(([ftype,rows])=>{
+    const byAcct={};
+    rows.forEach(r=>{
+      if(!byAcct[r.차변계정])byAcct[r.차변계정]={rows:[],공급가액:0,미반영:r.손익미반영};
+      byAcct[r.차변계정].rows.push(r);
+      byAcct[r.차변계정].공급가액+=n(r.공급가액);
+    });
+    return`<div class="panel"><div class="panel-title">${ftype} (${rows.length}건)</div>
+    ${Object.entries(byAcct).sort((a,b)=>b[1].공급가액-a[1].공급가액).map(([acct,info])=>`
+      <div style="padding:10px 18px;background:${info.미반영?'#fff0ee':'#fafafa'};border-bottom:1px solid #f2f2f7;display:flex;justify-content:space-between;">
+        <span style="font-size:12px;font-weight:600;">${info.미반영?'🚫 ':''} ${acct}
+        <span style="font-size:12px;font-weight:600;">${fmt(info.공급가액)}
+      </div>
+      <table><tr><th>일자</th><th>거래처</th><th>품명</th><th class="amt">공급가액</th><th class="amt">부가세</th></tr>
+      ${info.rows.map(r=>`<tr><td>${r.일자||''}</td><td>${r.거래처||''}</td><td>${r.품명||''}</td><td class="amt">${fmt(n(r.공급가액))}</td><td class="amt">${fmt(n(r.부가세))}</td></tr>`).join('')}
+      </table>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+function showTab(t){
+  const tabs=['dashboard','input','upload','txlist','history'];
+  document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',tabs[i]===t));
+  document.querySelectorAll('.section').forEach(el=>el.classList.remove('active'));
+  document.getElementById(t).classList.add('active');
+  if(t==='dashboard')renderDash();
+  if(t==='input')syncInputForm();
+  if(t==='history')renderHist();
+  if(t==='txlist')loadTx();
+}
+
+async function renderDash(){
+  const el=document.getElementById('dashboard');
+  if(!records.length){el.innerHTML='<div class="empty">저장된 데이터가 없어요.<br><b>입력</b> 탭에서 이번 달 P&L을 입력해주세요 😊</div>';return;}
+  const cur=records.find(r=>dashView&&r.year===dashView.year&&r.month===dashView.month)||records[records.length-1];
+  dashView={year:cur.year,month:cur.month};
+
+  // TX 데이터 먼저 로드
+  const {totals,details,revenue}=await getTxTotals(cur.year,cur.month);
+  const s=calcCost(cur,totals,revenue);
+  const margin=s.rev>0?(s.profit/s.rev*100).toFixed(1):0;
+
+  // 트렌드 카드 - 모든 월을 각자 실제 거래내역 기준으로 정확히 계산
+  const trendData=await Promise.all(records.map(async r=>{
+    if(r.year===cur.year&&r.month===cur.month)return{r,profit:s.profit};
+    const{totals:t2,revenue:rev2}=await getTxTotals(r.year,r.month);
+    return{r,profit:calcCost(r,t2,rev2).profit};
+  }));
+  const trendHtml=trendData.map(({r,profit})=>{
+    const active=r.year===dashView.year&&r.month===dashView.month;
+    return`<div class="trend-card${active?' active':''}" onclick="dashView={year:${r.year},month:${r.month}};renderDash()">
+      <div class="trend-month">${r.year}.${r.month}월</div>
+      <div class="trend-profit" style="color:${profit>=0?'#30d158':'#ff453a'};font-size:11px;">${fmt(profit)}</div>
+    </div>`;
+  }).join('');
+
+  // 비용 표 행 생성
+  function mainRow(label,val,sub){
+    const pct=s.cost>0?(val/s.cost*100).toFixed(1)+'%':'-';
+    const bar=s.cost>0?Math.min(100,val/s.cost*100):0;
+    return`<tr><td><b>${label}</b></td><td class="amt">${fmt(val)}</td><td class="amt">${pct}<div class="bar-wrap"><div class="bar red" style="width:${bar}%"></div></div></td></tr>${sub||''}`;
+  }
+  function subRows(obj){
+    return Object.entries(obj).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1])
+      .map(([k,v])=>`<tr class="sub-row"><td>└ ${k}</td><td class="amt">${fmt(v)}</td><td></td></tr>`).join('');
+  }
+
+  const 급여그룹={상용직급여:n(cur.상용직급여),외주인건비:n(cur.외주인건비),퇴직급여:n(cur.퇴직급여)};
+  const 사대그룹={'건강+장기':n(cur.건강장기),국민연금:n(cur.국민연금),고용보험:n(cur.고용보험),산재보험:n(cur.산재보험)};
+  const 신카그룹={신한:n(cur.신용카드신한),비씨:n(cur.신용카드비씨),삼성:n(cur.신용카드삼성),우리:n(cur.신용카드우리)};
+  const 커머그룹={상품금액할인:n(cur.상품금액할인),장바구니할인:n(cur.장바구니할인),적립금사용:n(cur.적립금사용)};
+
+  const costRows=[
+    mainRow('급여',s.급여계,subRows(급여그룹)),
+    mainRow('4대보험',s.사대보험계,subRows(사대그룹)),
+    mainRow('신용카드수수료',s.신용카드계,subRows(신카그룹)),
+    mainRow('커머스마케팅비',s.커머스계,subRows(커머그룹)),
+    totals.pg>0?mainRow('PG수수료',totals.pg,subRows(details.pg)):'',
+    totals.운반비>0?mainRow('운반비',totals.운반비,''):'',
+    totals.매입세금계산서>0?mainRow('매입세금계산서',totals.매입세금계산서,subRows(details.매입세금계산서)):'',
+    totals.매입계산서>0?mainRow('매입계산서',totals.매입계산서,subRows(details.매입계산서)):'',
+    n(cur.외화이체)>0?mainRow('외화이체',n(cur.외화이체),''):'',
+    n(cur.기타지출)>0?mainRow('기타지출',n(cur.기타지출),''):'',
+  ].filter(Boolean).join('');
+
+  const 잡이익박스=n(cur.잡이익)>0?`
+    <div class="jabiik-box">
+      <div style="font-size:12px;font-weight:600;color:#30d158;margin-bottom:6px;">💚 잡이익 (매출 미반영분)</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;"><span>잡이익<span style="font-weight:500;">${fmt(n(cur.잡이익))}</div>
+    </div>`:'';
+
+  const 미반영박스=Object.keys(details.미반영).length>0?`
+    <div class="not-reflected">
+      <div style="font-size:12px;font-weight:600;color:#ff453a;margin-bottom:6px;">🚫 손익 미반영 항목 (P&L 비용 제외)</div>
+      ${Object.entries(details.미반영).map(([k,v])=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;"><span>${k}<span style="font-weight:500;">${fmt(v.공급가액)}</div>`).join('')}
+      <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;border-top:1px solid #ffd0cc;margin-top:6px;padding-top:6px;"><span>소계<span style="color:#ff453a;">${fmt(Object.values(details.미반영).reduce((s,v)=>s+v.공급가액,0))}</div>
+    </div>`:'';
+
+  el.innerHTML=`
+    <div class="trend">${trendHtml}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <div style="font-size:15px;font-weight:600;">${cur.year}년 ${cur.month}월 결산</div>
+      <button class="btn sm" onclick="loadIntoForm(${cur.year},${cur.month})">✏️ 수정</button>
+    </div>
+    <div class="cards">
+      <div class="card"><div class="card-label">총 매출</div><div class="card-value" style="font-size:15px;">${fmt(s.rev)}</div></div>
+      <div class="card"><div class="card-label">총 비용</div><div class="card-value" style="font-size:15px;">${fmt(s.cost)}</div></div>
+      <div class="card"><div class="card-label">매출원가</div><div class="card-value" style="font-size:15px;">${fmt(s.매출원가)}</div></div>
+      <div class="card"><div class="card-label">당월 손익</div><div class="card-value ${s.profit>=0?'green':'red'}" style="font-size:15px;">${fmt(s.profit)}</div></div>
+      <div class="card"><div class="card-label">이익률</div><div class="card-value pct ${s.profit>=0?'green':'red'}">${margin}%</div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">💰 매출 내역 (수기 입력 + 매출세금계산서 자동합산)</div>
+      <table>
+        <tr><th>항목</th><th class="amt">금액</th><th class="amt">비중</th></tr>
+        ${['상품매출','제품매출','수수료매출','광고매출'].map(k=>{
+          const b=s.revBreak[k];
+          const total=b.수기+b.tx;
+          const pct=s.rev>0?(total/s.rev*100).toFixed(1)+'%':'-';
+          const bar=s.rev>0?Math.min(100,total/s.rev*100):0;
+          let sub='';
+          if(k==='상품매출'){
+            const 유팡=n(cur.유팡),락앤락=n(cur.락앤락),아이코닉스=n(cur.아이코닉스),고퀄=n(cur.고퀄);
+            const 브랜드입력있음=유팡!==0||락앤락!==0||아이코닉스!==0||고퀄!==0;
+            if(!브랜드입력있음&&n(cur.상품매출)>0){
+              sub+=`<tr class="sub-row"><td>└ 상품매출 (마이그레이션 전 데이터)</td><td class="amt">${fmt(n(cur.상품매출))}</td><td></td></tr>`;
+            } else {
+              sub+=`<tr class="sub-row"><td>└ 유팡</td><td class="amt">${fmt(유팡)}</td><td></td></tr>`;
+              sub+=`<tr class="sub-row"><td>└ 락앤락</td><td class="amt">${fmt(락앤락)}</td><td></td></tr>`;
+              sub+=`<tr class="sub-row"><td>└ 아이코닉스</td><td class="amt">${fmt(아이코닉스)}</td><td></td></tr>`;
+              sub+=`<tr class="sub-row"><td>└ 고퀄</td><td class="amt">${fmt(고퀄)}</td><td></td></tr>`;
+            }
+            if(b.tx>0)sub+=`<tr class="sub-row"><td>└ 매출세금계산서</td><td class="amt">${fmt(b.tx)}</td><td></td></tr>`;
+          } else if(k==='제품매출'){
+            const PB매출sum=n(cur['PB매출sum']),쿠팡로켓=n(cur.쿠팡로켓PB매출),맘가이드=n(cur.맘가이드PB매출);
+            const PB원시입력있음=PB매출sum!==0||쿠팡로켓!==0||맘가이드!==0;
+            if(!PB원시입력있음&&n(cur.제품매출)>0){
+              sub+=`<tr class="sub-row"><td>└ 제품매출 (마이그레이션 전 데이터)</td><td class="amt">${fmt(n(cur.제품매출))}</td><td></td></tr>`;
+            } else {
+              const 브랜드팀계산=(PB매출sum-쿠팡로켓-맘가이드)/1.1;
+              sub+=`<tr class="sub-row"><td>└ 브랜드팀 매출시트 (PB매출합계−쿠팡로켓−맘가이드)÷1.1</td><td class="amt">${fmt(브랜드팀계산)}</td><td></td></tr>`;
+              sub+=`<tr class="sub-row" style="color:#aaa;"><td>&nbsp;&nbsp;&nbsp;PB매출 합계 ${fmt(PB매출sum)} / 쿠팡로켓 ${fmt(쿠팡로켓)} / 맘가이드 ${fmt(맘가이드)}</td><td></td><td></td></tr>`;
+            }
+            if(b.tx>0)sub+=`<tr class="sub-row"><td>└ 매출세금계산서</td><td class="amt">${fmt(b.tx)}</td><td></td></tr>`;
+          } else if(b.tx>0){
+            sub=`<tr class="sub-row"><td>└ 수기 입력</td><td class="amt">${fmt(b.수기)}</td><td></td></tr><tr class="sub-row"><td>└ 매출세금계산서</td><td class="amt">${fmt(b.tx)}</td><td></td></tr>`;
+          }
+          return`<tr><td><b>${k}</b></td><td class="amt">${fmt(total)}</td><td class="amt">${pct}<div class="bar-wrap"><div class="bar" style="width:${bar}%"></div></div></td></tr>${sub}`;
+        }).join('')}
+        ${(()=>{
+          const b이자=s.revBreak.이자수익,b외화=s.revBreak.외화수익;
+          const total=b이자.수기+b이자.tx+b외화.수기+b외화.tx;
+          const pct=s.rev>0?(total/s.rev*100).toFixed(1)+'%':'-';
+          const bar=s.rev>0?Math.min(100,total/s.rev*100):0;
+          return`<tr><td>이자/외화수익</td><td class="amt">${fmt(total)}</td><td class="amt">${pct}<div class="bar-wrap"><div class="bar" style="width:${bar}%"></div></div></td></tr>`;
+        })()}
+        <tr class="total-row"><td>합계</td><td class="amt">${fmt(s.rev)}</td><td class="amt">100%</td></tr>
+      </table>
+    </div>
+    ${잡이익박스}
+    <div class="panel">
+      <div class="panel-title">📤 비용 내역</div>
+      <table>
+        <tr><th>항목</th><th class="amt">금액</th><th class="amt">비중</th></tr>
+        ${costRows}
+        <tr class="total-row"><td>비용 합계</td><td class="amt">${fmt(s.cost)}</td><td class="amt">100%</td></tr>
+      </table>
+    </div>
+    ${미반영박스}
+    <div class="panel">
+      <div class="panel-title">📦 매출원가</div>
+      <table>
+        <tr><th>항목</th><th class="amt">금액</th></tr>
+        <tr><td>기초재고</td><td class="amt">${fmt(n(cur.기초재고))}</td></tr>
+        <tr><td>+ 당기매입 (자동계산: 외주가공비+원재료+잡자재대+외화이체)</td><td class="amt">${fmt(s.당기매입계산)}</td></tr>
+        <tr><td>- 기말재고</td><td class="amt">${fmt(n(cur.기말재고))}</td></tr>
+        <tr class="total-row"><td>매출원가</td><td class="amt">${fmt(s.매출원가)}</td></tr>
+        <tr><td style="color:#86868b;font-size:12px;">비용반영금액 (매출원가-당기매입)</td><td class="amt" style="color:#86868b;font-size:12px;">${fmt(s.비용반영금액)}</td></tr>
+      </table>
+    </div>
+    ${cur.memo?`<div class="panel"><div class="panel-title">📝 메모</div><div style="padding:14px 18px;font-size:13px;">${cur.memo}</div></div>`:''}
+  `;
+}
+
+async function renderHist(){
+  const el=document.getElementById('hist-content');
+  if(!records.length){el.innerHTML='<div class="empty">저장된 기록이 없어요.</div>';return;}
+  el.innerHTML='<div class="loading">불러오는 중...</div>';
+  // 각 월의 TX 데이터 로드
+  const rows=[];
+  for(const r of [...records].reverse()){
+    const {totals,revenue}=await getTxTotals(r.year,r.month);
+    const s=calcCost(r,totals,revenue);
+    rows.push(`<div class="rec-item" onclick="dashView={year:${r.year},month:${r.month}};showTab('dashboard')">
+      <div>
+        <div class="rec-name">${r.year}년 ${r.month}월 <span class="badge ${s.profit>=0?'profit':'loss'}">${s.profit>=0?'흑자':'적자'}</div>
+        <div class="rec-meta">매출 ${fmtS(s.rev)} / 손익 ${fmtS(s.profit)}</div>
+      </div>
+      <button class="btn sm danger" onclick="event.stopPropagation();deleteRecord(${r.year},${r.month})">삭제</button>
+    </div>`);
+  }
+  el.innerHTML=`<div class="panel"><div class="panel-title">📁 월별 기록 (${records.length}개월)</div>`+rows.join('')+'</div>';
+}
+
+function loadIntoForm(year,month){
+  document.getElementById('yr').value=year;
+  document.getElementById('mo').value=month;
+  syncInputForm();
+  showTab('input');
+}
+
+async function syncInputForm(){
+  const year=+document.getElementById('yr').value;
+  const month=+document.getElementById('mo').value;
+  const r=records.find(x=>x.year===year&&x.month===month);
+  if(r){
+    FIELDS.forEach(f=>{const el=document.getElementById('f-'+f);if(el)el.value=(f in r)?fmtInput(r[f]):'';});
+    document.getElementById('f-memo').value=r.memo||'';
+  } else {
+    clearForm();
+  }
+  // 당기매입은 저장된 값이 아니라 항상 실시간 계산 (표시용, disabled)
+  const {totals}=await getTxTotals(year,month);
+  _curTxTotals=totals;
+  updateDangiCalc();
+}
+
+function updateDangiCalc(){
+  const 외화이체=document.getElementById('f-외화이체');
+  const 당기매입계산=n(_curTxTotals.당기매입)+(외화이체?rawNum(외화이체):0);
+  const f당기매입=document.getElementById('f-당기매입');
+  if(f당기매입)f당기매입.value=fmtInput(당기매입계산);
+}
+
+function clearForm(){
+  FIELDS.forEach(f=>{const el=document.getElementById('f-'+f);if(el)el.value='';});
+  document.getElementById('f-memo').value='';
+}
+
+(function(){
+  ['yr','uyr','tyr'].forEach(id=>{
+    const el=document.getElementById(id);
+    for(let y=2024;y<=2028;y++){
+      const o=document.createElement('option');
+      o.value=y;o.text=y+'년';
+      if(y===new Date().getFullYear())o.selected=true;
+      el.appendChild(o);
+    }
+  });
+  document.getElementById('mo').value=new Date().getMonth()+1;
+  document.getElementById('umo').value=new Date().getMonth()+1;
+  document.getElementById('tmo').value=new Date().getMonth()+1;
+  loadAll();
+})();
+
+(function(){
+  const PW = '100455';
+  const SESSION_KEY = 'vb_auth';
+  function checkPw(){
+    const v = document.getElementById('pw-input').value;
+    if(v === PW){
+      sessionStorage.setItem(SESSION_KEY, '1');
+      document.getElementById('pw-screen').style.display='none';
+    } else {
+      document.getElementById('pw-error').style.display='block';
+      document.getElementById('pw-input').value='';
+      document.getElementById('pw-input').focus();
+    }
+  }
+  window.checkPw = checkPw;
+  // 이미 인증된 경우
+  if(sessionStorage.getItem(SESSION_KEY)==='1'){
+    document.getElementById('pw-screen').style.display='none';
+  }
+})();
+</script>
+</body>
+</html>

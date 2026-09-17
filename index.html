@@ -86,8 +86,10 @@ tr.clk{cursor:pointer;}tr.clk:hover td{background:#f0f7ff;}
 .cmp{min-width:100%;}
 .content.wide{max-width:none;}
 .cmp th,.cmp td{white-space:nowrap;padding:8px 10px;font-size:12px;overflow:hidden;text-overflow:ellipsis;}
-.colrz{position:absolute;top:20%;right:-4px;width:9px;height:60%;cursor:col-resize;border-right:2px solid #e5e5e7;z-index:2;}
-.colrz:hover{border-right-color:#0071e3;}
+.cmp th{user-select:none;}
+.colrz{position:absolute;top:0;right:-7px;width:14px;height:100%;cursor:col-resize;z-index:2;display:flex;align-items:center;justify-content:center;}
+.colrz::after{content:'';width:3px;height:60%;border-radius:2px;background:#d2d2d7;}
+.colrz:hover::after{background:#0071e3;width:4px;}
 .cmp th{text-align:right;}
 .cmp th:first-child{text-align:left;}
 .cmp td:first-child,.cmp th:first-child{position:sticky;left:0;background:#fff;z-index:1;box-shadow:2px 0 0 #f2f2f7;}

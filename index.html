@@ -427,6 +427,7 @@ async function getTxTotals(year,month){
   const details={pg:{},운반비:{},매입세금계산서:{},매입계산서:{},미반영:{}};
   const revenue={}; // 매출세금계산서 대변계정별 합계 (공급가액) — 비용 계산과 완전히 분리
   rows.forEach(r=>{
+    if(r.파일종류==='잡이익')return; // 잡이익 상세는 비용/매출 계산에서 제외 (합계는 pl_records.잡이익에 반영됨)
     // 매출세금계산서는 매출 데이터이므로 비용 계산에서 제외하고, 별도로 매출 합계에만 반영
     if(r.파일종류==='매출세금계산서'){
       const acct=r.차변계정;
@@ -694,6 +695,7 @@ async function openTxDetail(kind,keyEnc){
   const {data}=await sb.from('transactions').select('*').eq('year',year).eq('month',month);
   const all=data||[];
   const rows=all.filter(r=>{
+    if(r.파일종류==='잡이익')return false;
     if(r.파일종류==='매출세금계산서')return kind==='revtx'&&(!key||r.차변계정===key);
     if(r.손익미반영)return kind==='미반영'&&(!key||r.차변계정===key);
     if(r.차변계정==='(판)PG수수료[자동분류]')return kind==='pg'&&(!key||r.거래처===key);
@@ -725,6 +727,59 @@ function openManualDtl(group){
   <div style="padding:12px 18px;font-size:12px;color:#86868b;background:#fafafa;">✏️ 이 항목은 수기 입력값이에요. 금액 수정은 <b>입력</b> 탭에서 할 수 있어요.</div>`;
   showDtl(`${dashView.year}.${dashView.month}월 · ${group}`,body);
 }
+/* ===== 잡이익 상세 (내역 추가/삭제 → 합계 자동 반영) ===== */
+async function openJabDtl(){
+  const {year,month}=dashView;
+  showDtl(`${year}.${month}월 · 잡이익 상세`,'<div class="loading">불러오는 중...</div>');
+  const {data}=await sb.from('transactions').select('*').eq('year',year).eq('month',month).eq('파일종류','잡이익').order('id');
+  const rows=data||[];
+  const cur=records.find(r=>r.year===year&&r.month===month);
+  const manual=n(cur&&cur.잡이익);
+  const sum=rows.reduce((s,r)=>s+n(r.공급가액),0);
+  const notice=rows.length===0&&manual>0
+    ?`<div style="padding:12px 18px;font-size:12px;color:#0071e3;background:#f0f7ff;">현재 합계(${fmt(manual)})만 입력되어 있어요. 아래에 상세 내역을 추가하면 <b>합계가 자동 계산되어 반영</b>돼요.</div>`
+    :`<div style="padding:10px 18px;font-size:12px;color:#86868b;background:#fafafa;">상세 내역을 추가/삭제하면 잡이익 합계가 자동으로 갱신돼요.</div>`;
+  const body=`
+    ${notice}
+    <table>
+      <tr><th>일자</th><th>내용</th><th class="amt">금액</th><th style="width:36px;"></th></tr>
+      ${rows.map(r=>`<tr><td style="color:#86868b;">${r.일자||'-'}</td><td>${r.품명||'-'}</td><td class="amt">${fmt(n(r.공급가액))}</td><td style="text-align:center;"><span style="cursor:pointer;color:#ff453a;" onclick="delJabRow(${r.id})" title="삭제">✕</span></td></tr>`).join('')||'<tr><td colspan="4" style="color:#86868b;text-align:center;">아직 상세 내역이 없어요.</td></tr>'}
+      ${rows.length?`<tr class="total-row"><td colspan="2">상세 합계 · ${rows.length}건</td><td class="amt">${fmt(sum)}</td><td></td></tr>`:''}
+    </table>
+    <div style="display:flex;gap:8px;padding:14px 18px;border-top:1px solid #f2f2f7;align-items:center;flex-wrap:wrap;">
+      <input type="text" id="jab-name" placeholder="내용 (예: 정부지원금, 환급금)" style="flex:2;min-width:150px;">
+      <input type="text" id="jab-amt" placeholder="금액" inputmode="numeric" style="flex:1;min-width:100px;text-align:right;" oninput="this.value=this.value.replace(/[^0-9-]/g,'').replace(/\B(?=(\d{3})+(?!\d))/g,',')">
+      <button class="btn primary sm" onclick="addJabRow()">+ 추가</button>
+    </div>`;
+  showDtl(`${year}.${month}월 · 잡이익 상세`,body);
+}
+async function addJabRow(){
+  const name=(document.getElementById('jab-name').value||'').trim();
+  const amt=+String(document.getElementById('jab-amt').value||'').replace(/,/g,'')||0;
+  if(!name||!amt){alert('내용과 금액을 입력해주세요.');return;}
+  const {year,month}=dashView;
+  const d=new Date();const 일자=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const {error}=await sb.from('transactions').insert({year,month,파일종류:'잡이익',일자,거래처:'',품명:name,공급가액:amt,부가세:0,합계:amt,차변계정:'잡이익',대변계정:'잡이익',손익미반영:false});
+  if(error){alert('저장 실패: '+error.message);return;}
+  await syncJabTotal();
+  openJabDtl();
+}
+async function delJabRow(id){
+  if(!confirm('이 내역을 삭제할까요?'))return;
+  const {error}=await sb.from('transactions').delete().eq('id',id);
+  if(error){alert('삭제 실패: '+error.message);return;}
+  await syncJabTotal();
+  openJabDtl();
+}
+async function syncJabTotal(){
+  const {year,month}=dashView;
+  const {data}=await sb.from('transactions').select('공급가액').eq('year',year).eq('month',month).eq('파일종류','잡이익');
+  const sum=(data||[]).reduce((s,r)=>s+n(r.공급가액),0);
+  await sb.from('pl_records').update({잡이익:sum,updated_at:new Date().toISOString()}).eq('year',year).eq('month',month);
+  const cur=records.find(r=>r.year===year&&r.month===month);
+  if(cur)cur.잡이익=sum;
+  renderDash();
+}
 /* ===== 월 비교 (전월 대비 증감) ===== */
 async function renderCompare(){
   const el=document.getElementById('compare');
@@ -734,6 +789,7 @@ async function renderCompare(){
   const all=data||[];
   const byM={};
   all.forEach(r=>{
+    if(r.파일종류==='잡이익')return;
     const k=r.year+'-'+r.month;
     const b=byM[k]=byM[k]||{totals:{pg:0,운반비:0,매입세금계산서:0,매입계산서:0,당기매입:0},revenue:{}};
     if(r.파일종류==='매출세금계산서'){b.revenue[r.차변계정]=(b.revenue[r.차변계정]||0)+n(r.공급가액);return;}
@@ -835,11 +891,11 @@ async function renderDash(){
     n(cur.기타지출)>0?mainRow('기타지출',n(cur.기타지출),'',`openManualDtl('기타지출')`):'',
   ].filter(Boolean).join('');
 
-  const 잡이익박스=n(cur.잡이익)>0?`
-    <div class="jabiik-box" style="cursor:pointer;" onclick="openManualDtl('잡이익')" title="클릭하면 상세가 열려요">
-      <div style="font-size:12px;font-weight:600;color:#30d158;margin-bottom:6px;">💚 잡이익 (매출 미반영분) <span style="font-weight:400;color:#86868b;">›</span></div>
+  const 잡이익박스=`
+    <div class="jabiik-box" style="cursor:pointer;" onclick="openJabDtl()" title="클릭하면 상세 내역을 보고 입력할 수 있어요">
+      <div style="font-size:12px;font-weight:600;color:#30d158;margin-bottom:6px;">💚 잡이익 (매출 미반영분) <span style="font-weight:400;color:#86868b;">· 클릭해서 상세 보기/입력 ›</span></div>
       <div style="display:flex;justify-content:space-between;font-size:13px;"><span>잡이익<span style="font-weight:500;">${fmt(n(cur.잡이익))}</div>
-    </div>`:'';
+    </div>`;
 
   const 미반영박스=Object.keys(details.미반영).length>0?`
     <div class="not-reflected">

@@ -74,6 +74,29 @@ select:focus,input:focus{border-color:#0071e3;}
 .trend-profit{font-size:14px;font-weight:600;margin-top:3px;}
 .empty{text-align:center;padding:48px 24px;color:#86868b;font-size:14px;line-height:1.8;}
 .loading{text-align:center;padding:48px;color:#86868b;font-size:14px;}
+tr.clk{cursor:pointer;}tr.clk:hover td{background:#f0f7ff;}
+.ovl{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:99;padding:20px;}
+.mdl{background:#fff;border-radius:14px;max-width:680px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,.2);}
+.mdl-h{padding:15px 20px;font-size:14px;font-weight:600;border-bottom:1px solid #f2f2f7;display:flex;justify-content:space-between;align-items:center;}
+.mdl-x{cursor:pointer;color:#86868b;font-size:20px;line-height:1;padding:2px 8px;border-radius:6px;}
+.mdl-x:hover{background:#f5f5f7;}
+.mdl-b{overflow-y:auto;}
+.mdl-b table td,.mdl-b table th{padding:8px 16px;font-size:12.5px;}
+.cmpwrap{overflow-x:auto;background:#fff;border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.08);}
+.cmp{min-width:100%;}
+.cmp th,.cmp td{white-space:nowrap;padding:9px 14px;}
+.cmp th{text-align:right;}
+.cmp th:first-child{text-align:left;}
+.cmp td:first-child,.cmp th:first-child{position:sticky;left:0;background:#fff;z-index:1;box-shadow:2px 0 0 #f2f2f7;}
+.cmp .grp td{background:#fafafa;font-weight:700;}
+.cmp .grp td:first-child{background:#fafafa;}
+.cmp .amt{font-variant-numeric:tabular-nums;}
+.chg{display:block;font-size:10.5px;color:#b0b0b5;margin-top:2px;}
+.chg.up{color:#ff453a;}
+.chg.dn{color:#0071e3;}
+.chg.mid{font-weight:700;}
+.chg.big{font-weight:700;background:#fff0ee;border-radius:4px;padding:0 4px;display:inline-block;}
+.chg.big.dn{background:#f0f7ff;}
 .upload-zone{border:2px dashed #d2d2d7;border-radius:12px;padding:32px;text-align:center;cursor:pointer;margin-bottom:16px;}
 .upload-zone:hover,.upload-zone.dragging{border-color:#0071e3;background:#f0f7ff;}
 .upload-icon{font-size:32px;margin-bottom:8px;}
@@ -116,6 +139,7 @@ select:focus,input:focus{border-color:#0071e3;}
 </div>
 <div class="tabs">
   <div class="tab active" onclick="showTab('dashboard')">현황</div>
+  <div class="tab" onclick="showTab('compare')">📈 월 비교</div>
   <div class="tab" onclick="showTab('input')">입력</div>
   <div class="tab" onclick="showTab('upload')">📎 위하고 업로드</div>
   <div class="tab" onclick="showTab('txlist')">거래내역</div>
@@ -125,6 +149,9 @@ select:focus,input:focus{border-color:#0071e3;}
 
   <!-- 현황 -->
   <div class="section active" id="dashboard"><div class="loading">데이터 불러오는 중...</div></div>
+
+  <!-- 월 비교 -->
+  <div class="section" id="compare"><div class="loading">데이터 불러오는 중...</div></div>
 
   <!-- 입력 -->
   <div class="section" id="input">
@@ -639,16 +666,121 @@ async function loadTx(){
 }
 
 function showTab(t){
-  const tabs=['dashboard','input','upload','txlist','history'];
+  const tabs=['dashboard','compare','input','upload','txlist','history'];
   document.querySelectorAll('.tab').forEach((el,i)=>el.classList.toggle('active',tabs[i]===t));
   document.querySelectorAll('.section').forEach(el=>el.classList.remove('active'));
   document.getElementById(t).classList.add('active');
   if(t==='dashboard')renderDash();
+  if(t==='compare')renderCompare();
   if(t==='input')syncInputForm();
   if(t==='history')renderHist();
   if(t==='txlist')loadTx();
 }
 
+/* ===== 상세 드릴다운 팝업 ===== */
+const _e=k=>encodeURIComponent(k).replace(/'/g,'%27');
+function closeDtl(){const o=document.getElementById('dtlov');if(o)o.remove();}
+function showDtl(title,bodyHtml){
+  closeDtl();
+  const ov=document.createElement('div');ov.className='ovl';ov.id='dtlov';
+  ov.innerHTML=`<div class="mdl"><div class="mdl-h"><span>${title}</span><span class="mdl-x" onclick="closeDtl()">×</span></div><div class="mdl-b">${bodyHtml}</div></div>`;
+  ov.addEventListener('click',e=>{if(e.target===ov)closeDtl();});
+  document.body.appendChild(ov);
+}
+async function openTxDetail(kind,keyEnc){
+  const key=keyEnc?decodeURIComponent(keyEnc):'';
+  const {year,month}=dashView;
+  showDtl(`${year}.${month}월 상세`,'<div class="loading">불러오는 중...</div>');
+  const {data}=await sb.from('transactions').select('*').eq('year',year).eq('month',month);
+  const all=data||[];
+  const rows=all.filter(r=>{
+    if(r.파일종류==='매출세금계산서')return kind==='revtx'&&(!key||r.차변계정===key);
+    if(r.손익미반영)return kind==='미반영'&&(!key||r.차변계정===key);
+    if(r.차변계정==='(판)PG수수료[자동분류]')return kind==='pg'&&(!key||r.거래처===key);
+    if((r.차변계정||'').includes('운반비'))return kind==='운반비';
+    if(r.파일종류==='매입계산서')return kind==='매입계산서'&&(!key||r.차변계정===key);
+    return kind==='매입세금계산서'&&(!key||r.차변계정===key);
+  }).sort((a,b)=>n(b.공급가액)-n(a.공급가액));
+  const titleMap={pg:'PG수수료',운반비:'운반비',매입세금계산서:'매입세금계산서',매입계산서:'매입계산서',미반영:'손익 미반영',revtx:'매출세금계산서'};
+  const sum=rows.reduce((s,r)=>s+n(r.공급가액),0);
+  const body=rows.length?`<table>
+    <tr><th>일자</th><th>거래처</th><th>품명</th><th>계정</th><th class="amt">공급가액</th></tr>
+    ${rows.slice(0,500).map(r=>`<tr><td style="color:#86868b;">${r.일자||'-'}</td><td><b>${r.거래처||'-'}</b></td><td style="color:#555;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${(r.품명||'').replace(/"/g,'&quot;')}">${r.품명||'-'}</td><td style="color:#86868b;font-size:11px;">${kind==='revtx'?(r.차변계정||''):(r.차변계정||'')}</td><td class="amt">${fmt(n(r.공급가액))}</td></tr>`).join('')}
+    <tr class="total-row"><td colspan="4">합계 · ${rows.length}건${rows.length>500?' (상위 500건 표시)':''}</td><td class="amt">${fmt(sum)}</td></tr>
+  </table>`:'<div class="empty">해당 내역이 없어요.</div>';
+  showDtl(`${year}.${month}월 · ${titleMap[kind]||''}${key?' · '+key:''}`,body);
+}
+const MANUAL_GROUPS={'급여':['상용직급여','외주인건비','퇴직급여'],'4대보험':['국민연금','건강장기','고용보험','산재보험'],'신용카드수수료':['신용카드신한','신용카드비씨','신용카드삼성','신용카드우리'],'커머스마케팅비':['상품금액할인','장바구니할인','적립금사용'],'외화이체':['외화이체'],'기타지출':['기타지출'],'잡이익':['잡이익']};
+const MANUAL_LABELS={상용직급여:'상용직급여',외주인건비:'외주인건비',퇴직급여:'퇴직급여',국민연금:'국민연금',건강장기:'건강+장기',고용보험:'고용보험',산재보험:'산재보험',신용카드신한:'신한',신용카드비씨:'비씨',신용카드삼성:'삼성',신용카드우리:'우리',상품금액할인:'상품금액할인',장바구니할인:'장바구니할인',적립금사용:'적립금사용',외화이체:'외화이체',기타지출:'기타지출',잡이익:'잡이익'};
+function openManualDtl(group){
+  const cur=records.find(r=>dashView&&r.year===dashView.year&&r.month===dashView.month);if(!cur)return;
+  const fields=MANUAL_GROUPS[group]||[];
+  const rows=fields.map(f=>({label:MANUAL_LABELS[f]||f,val:n(cur[f])}));
+  const sum=rows.reduce((s,r)=>s+r.val,0);
+  const body=`<table>
+    <tr><th>구성 항목</th><th class="amt">금액</th></tr>
+    ${rows.map(r=>`<tr><td>${r.label}</td><td class="amt">${fmt(r.val)}</td></tr>`).join('')}
+    <tr class="total-row"><td>합계</td><td class="amt">${fmt(sum)}</td></tr>
+  </table>
+  <div style="padding:12px 18px;font-size:12px;color:#86868b;background:#fafafa;">✏️ 이 항목은 수기 입력값이에요. 금액 수정은 <b>입력</b> 탭에서 할 수 있어요.</div>`;
+  showDtl(`${dashView.year}.${dashView.month}월 · ${group}`,body);
+}
+/* ===== 월 비교 (전월 대비 증감) ===== */
+async function renderCompare(){
+  const el=document.getElementById('compare');
+  if(!records.length){el.innerHTML='<div class="empty">저장된 데이터가 없어요.</div>';return;}
+  el.innerHTML='<div class="loading">월별 데이터 계산 중...</div>';
+  const {data}=await sb.from('transactions').select('파일종류,차변계정,공급가액,손익미반영,year,month');
+  const all=data||[];
+  const byM={};
+  all.forEach(r=>{
+    const k=r.year+'-'+r.month;
+    const b=byM[k]=byM[k]||{totals:{pg:0,운반비:0,매입세금계산서:0,매입계산서:0,당기매입:0},revenue:{}};
+    if(r.파일종류==='매출세금계산서'){b.revenue[r.차변계정]=(b.revenue[r.차변계정]||0)+n(r.공급가액);return;}
+    if(r.손익미반영)return;
+    const acct=r.차변계정||'',amt=n(r.공급가액);
+    if(acct==='(판)PG수수료[자동분류]')b.totals.pg+=amt;
+    else if(acct.includes('운반비'))b.totals.운반비+=amt;
+    else if(r.파일종류==='매입계산서')b.totals.매입계산서+=amt;
+    else b.totals.매입세금계산서+=amt;
+    if(['외주가공비','잡자재대','원재료'].some(x=>acct.includes(x)))b.totals.당기매입+=amt;
+  });
+  const cols=records.map(r=>{
+    const b=byM[r.year+'-'+r.month]||{totals:{pg:0,운반비:0,매입세금계산서:0,매입계산서:0,당기매입:0},revenue:{}};
+    const s=calcCost(r,b.totals,b.revenue);
+    const rv=k2=>s.revBreak[k2].수기+s.revBreak[k2].tx;
+    return {label:r.year+'.'+r.month+'월',vals:{
+      '총 매출':s.rev,'상품매출':rv('상품매출'),'제품매출':rv('제품매출'),'수수료매출':rv('수수료매출'),'광고매출':rv('광고매출'),'이자/외화수익':rv('이자수익')+rv('외화수익'),'잡이익':n(r.잡이익),
+      '총 비용':s.cost,'급여':s.급여계,'4대보험':s.사대보험계,'신용카드수수료':s.신용카드계,'커머스마케팅비':s.커머스계,'PG수수료':b.totals.pg,'운반비':b.totals.운반비,'매입세금계산서':b.totals.매입세금계산서,'매입계산서':b.totals.매입계산서,'외화이체':n(r.외화이체),'기타지출':n(r.기타지출),
+      '매출원가':s.매출원가,'당월 손익':s.profit,'이익률(%)':s.rev>0?+(s.profit/s.rev*100).toFixed(1):0,
+    }};
+  });
+  const items=Object.keys(cols[0].vals);
+  const groupRows=new Set(['총 매출','총 비용','매출원가','당월 손익','이익률(%)']);
+  function cell(item,i){
+    const v=cols[i].vals[item];
+    const isRate=item==='이익률(%)';
+    const valTxt=isRate?v.toFixed(1)+'%':fmt(v);
+    let chg='';
+    if(i>0){
+      const pv=cols[i-1].vals[item];
+      if(isRate){
+        const d=+(v-pv).toFixed(1);
+        if(d!==0){const ap=Math.abs(d);const cls=ap>=10?'big':ap>=5?'mid':'';chg=`<span class="chg ${d>0?'up':'dn'} ${cls}">${d>0?'▲':'▼'} ${Math.abs(d).toFixed(1)}%p</span>`;}
+      } else if(pv!==0&&pv!=null){
+        const p=(v-pv)/Math.abs(pv)*100;
+        if(Math.abs(p)>=0.5){const ap=Math.abs(p);const cls=ap>=30?'big':ap>=10?'mid':'';chg=`<span class="chg ${p>0?'up':'dn'} ${cls}">${p>0?'▲':'▼'} ${Math.abs(p).toFixed(1)}%</span>`;}
+      } else if(pv===0&&v!==0){chg='<span class="chg up mid">신규</span>';}
+    }
+    return `<td class="amt">${valTxt}${chg}</td>`;
+  }
+  el.innerHTML=`
+    <div style="font-size:12px;color:#86868b;margin-bottom:12px;">전월 대비 증감율 · <span class="chg up big" style="font-size:11px;">▲ 30%+</span> 크게 튀는 항목 · <b>▲/▼ 10%+</b> 굵게 표시 — 튀는 숫자를 먼저 점검하세요</div>
+    <div class="cmpwrap"><table class="cmp">
+      <tr><th>항목</th>${cols.map(c=>`<th class="amt">${c.label}</th>`).join('')}</tr>
+      ${items.map(item=>`<tr${groupRows.has(item)?' class="grp"':''}><td>${groupRows.has(item)?'<b>'+item+'</b>':'└ '+item}</td>${cols.map((c,i)=>cell(item,i)).join('')}</tr>`).join('')}
+    </table></div>`;
+}
 async function renderDash(){
   const el=document.getElementById('dashboard');
   if(!records.length){el.innerHTML='<div class="empty">저장된 데이터가 없어요.<br><b>입력</b> 탭에서 이번 달 P&L을 입력해주세요 😊</div>';return;}
@@ -675,14 +807,14 @@ async function renderDash(){
   }).join('');
 
   // 비용 표 행 생성
-  function mainRow(label,val,sub){
+  function mainRow(label,val,sub,clk){
     const pct=s.cost>0?(val/s.cost*100).toFixed(1)+'%':'-';
     const bar=s.cost>0?Math.min(100,val/s.cost*100):0;
-    return`<tr><td><b>${label}</b></td><td class="amt">${fmt(val)}</td><td class="amt">${pct}<div class="bar-wrap"><div class="bar red" style="width:${bar}%"></div></div></td></tr>${sub||''}`;
+    return`<tr${clk?` class="clk" onclick="${clk}" title="클릭하면 상세 내역이 열려요"`:''}><td><b>${label}</b>${clk?' <span style="color:#c7c7cc;font-size:11px;">›</span>':''}</td><td class="amt">${fmt(val)}</td><td class="amt">${pct}<div class="bar-wrap"><div class="bar red" style="width:${bar}%"></div></div></td></tr>${sub||''}`;
   }
-  function subRows(obj){
+  function subRows(obj,clkFn){
     return Object.entries(obj).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1])
-      .map(([k,v])=>`<tr class="sub-row"><td>└ ${k}</td><td class="amt">${fmt(v)}</td><td></td></tr>`).join('');
+      .map(([k,v])=>`<tr class="sub-row${clkFn?' clk':''}"${clkFn?` onclick="${clkFn(k)}" title="클릭하면 상세 내역이 열려요"`:''}><td>└ ${k}</td><td class="amt">${fmt(v)}</td><td></td></tr>`).join('');
   }
 
   const 급여그룹={상용직급여:n(cur.상용직급여),외주인건비:n(cur.외주인건비),퇴직급여:n(cur.퇴직급여)};
@@ -691,28 +823,28 @@ async function renderDash(){
   const 커머그룹={상품금액할인:n(cur.상품금액할인),장바구니할인:n(cur.장바구니할인),적립금사용:n(cur.적립금사용)};
 
   const costRows=[
-    mainRow('급여',s.급여계,subRows(급여그룹)),
-    mainRow('4대보험',s.사대보험계,subRows(사대그룹)),
-    mainRow('신용카드수수료',s.신용카드계,subRows(신카그룹)),
-    mainRow('커머스마케팅비',s.커머스계,subRows(커머그룹)),
-    totals.pg>0?mainRow('PG수수료',totals.pg,subRows(details.pg)):'',
-    totals.운반비>0?mainRow('운반비',totals.운반비,''):'',
-    totals.매입세금계산서>0?mainRow('매입세금계산서',totals.매입세금계산서,subRows(details.매입세금계산서)):'',
-    totals.매입계산서>0?mainRow('매입계산서',totals.매입계산서,subRows(details.매입계산서)):'',
-    n(cur.외화이체)>0?mainRow('외화이체',n(cur.외화이체),''):'',
-    n(cur.기타지출)>0?mainRow('기타지출',n(cur.기타지출),''):'',
+    mainRow('급여',s.급여계,subRows(급여그룹),`openManualDtl('급여')`),
+    mainRow('4대보험',s.사대보험계,subRows(사대그룹),`openManualDtl('4대보험')`),
+    mainRow('신용카드수수료',s.신용카드계,subRows(신카그룹),`openManualDtl('신용카드수수료')`),
+    mainRow('커머스마케팅비',s.커머스계,subRows(커머그룹),`openManualDtl('커머스마케팅비')`),
+    totals.pg>0?mainRow('PG수수료',totals.pg,subRows(details.pg,k=>`openTxDetail('pg','${_e(k)}')`),`openTxDetail('pg','')`):'',
+    totals.운반비>0?mainRow('운반비',totals.운반비,'',`openTxDetail('운반비','')`):'',
+    totals.매입세금계산서>0?mainRow('매입세금계산서',totals.매입세금계산서,subRows(details.매입세금계산서,k=>`openTxDetail('매입세금계산서','${_e(k)}')`),`openTxDetail('매입세금계산서','')`):'',
+    totals.매입계산서>0?mainRow('매입계산서',totals.매입계산서,subRows(details.매입계산서,k=>`openTxDetail('매입계산서','${_e(k)}')`),`openTxDetail('매입계산서','')`):'',
+    n(cur.외화이체)>0?mainRow('외화이체',n(cur.외화이체),'',`openManualDtl('외화이체')`):'',
+    n(cur.기타지출)>0?mainRow('기타지출',n(cur.기타지출),'',`openManualDtl('기타지출')`):'',
   ].filter(Boolean).join('');
 
   const 잡이익박스=n(cur.잡이익)>0?`
-    <div class="jabiik-box">
-      <div style="font-size:12px;font-weight:600;color:#30d158;margin-bottom:6px;">💚 잡이익 (매출 미반영분)</div>
+    <div class="jabiik-box" style="cursor:pointer;" onclick="openManualDtl('잡이익')" title="클릭하면 상세가 열려요">
+      <div style="font-size:12px;font-weight:600;color:#30d158;margin-bottom:6px;">💚 잡이익 (매출 미반영분) <span style="font-weight:400;color:#86868b;">›</span></div>
       <div style="display:flex;justify-content:space-between;font-size:13px;"><span>잡이익<span style="font-weight:500;">${fmt(n(cur.잡이익))}</div>
     </div>`:'';
 
   const 미반영박스=Object.keys(details.미반영).length>0?`
     <div class="not-reflected">
-      <div style="font-size:12px;font-weight:600;color:#ff453a;margin-bottom:6px;">🚫 손익 미반영 항목 (P&L 비용 제외)</div>
-      ${Object.entries(details.미반영).map(([k,v])=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;"><span>${k}<span style="font-weight:500;">${fmt(v.공급가액)}</div>`).join('')}
+      <div style="font-size:12px;font-weight:600;color:#ff453a;margin-bottom:6px;">🚫 손익 미반영 항목 (P&L 비용 제외) <span style="font-weight:400;color:#86868b;">· 항목 클릭 시 상세</span></div>
+      ${Object.entries(details.미반영).map(([k,v])=>`<div style="display:flex;justify-content:space-between;font-size:13px;padding:4px 0;cursor:pointer;" onclick="openTxDetail('미반영','${_e(k)}')" title="클릭하면 상세 내역이 열려요"><span>${k}<span style="font-weight:500;">${fmt(v.공급가액)}</div>`).join('')}
       <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:600;border-top:1px solid #ffd0cc;margin-top:6px;padding-top:6px;"><span>소계<span style="color:#ff453a;">${fmt(Object.values(details.미반영).reduce((s,v)=>s+v.공급가액,0))}</div>
     </div>`:'';
 
@@ -750,7 +882,7 @@ async function renderDash(){
               sub+=`<tr class="sub-row"><td>└ 아이코닉스</td><td class="amt">${fmt(아이코닉스)}</td><td></td></tr>`;
               sub+=`<tr class="sub-row"><td>└ 고퀄</td><td class="amt">${fmt(고퀄)}</td><td></td></tr>`;
             }
-            if(b.tx>0)sub+=`<tr class="sub-row"><td>└ 매출세금계산서</td><td class="amt">${fmt(b.tx)}</td><td></td></tr>`;
+            if(b.tx>0)sub+=`<tr class="sub-row clk" onclick="openTxDetail('revtx','${_e(k)}')" title="클릭하면 상세 내역이 열려요"><td>└ 매출세금계산서</td><td class="amt">${fmt(b.tx)}</td><td></td></tr>`;
           } else if(k==='제품매출'){
             const PB매출sum=n(cur['PB매출sum']),쿠팡로켓=n(cur.쿠팡로켓PB매출),맘가이드=n(cur.맘가이드PB매출);
             const PB원시입력있음=PB매출sum!==0||쿠팡로켓!==0||맘가이드!==0;
@@ -761,9 +893,9 @@ async function renderDash(){
               sub+=`<tr class="sub-row"><td>└ 브랜드팀 매출시트 (PB매출합계−쿠팡로켓−맘가이드)÷1.1</td><td class="amt">${fmt(브랜드팀계산)}</td><td></td></tr>`;
               sub+=`<tr class="sub-row" style="color:#aaa;"><td>&nbsp;&nbsp;&nbsp;PB매출 합계 ${fmt(PB매출sum)} / 쿠팡로켓 ${fmt(쿠팡로켓)} / 맘가이드 ${fmt(맘가이드)}</td><td></td><td></td></tr>`;
             }
-            if(b.tx>0)sub+=`<tr class="sub-row"><td>└ 매출세금계산서</td><td class="amt">${fmt(b.tx)}</td><td></td></tr>`;
+            if(b.tx>0)sub+=`<tr class="sub-row clk" onclick="openTxDetail('revtx','${_e(k)}')" title="클릭하면 상세 내역이 열려요"><td>└ 매출세금계산서</td><td class="amt">${fmt(b.tx)}</td><td></td></tr>`;
           } else if(b.tx>0){
-            sub=`<tr class="sub-row"><td>└ 수기 입력</td><td class="amt">${fmt(b.수기)}</td><td></td></tr><tr class="sub-row"><td>└ 매출세금계산서</td><td class="amt">${fmt(b.tx)}</td><td></td></tr>`;
+            sub=`<tr class="sub-row"><td>└ 수기 입력</td><td class="amt">${fmt(b.수기)}</td><td></td></tr><tr class="sub-row clk" onclick="openTxDetail('revtx','${_e(k)}')" title="클릭하면 상세 내역이 열려요"><td>└ 매출세금계산서</td><td class="amt">${fmt(b.tx)}</td><td></td></tr>`;
           }
           return`<tr><td><b>${k}</b></td><td class="amt">${fmt(total)}</td><td class="amt">${pct}<div class="bar-wrap"><div class="bar" style="width:${bar}%"></div></div></td></tr>${sub}`;
         }).join('')}
